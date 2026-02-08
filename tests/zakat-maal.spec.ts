@@ -289,39 +289,54 @@ test.describe("Component Validation", () => {
 });
 
 test.describe("Zakat Journey Flow", () => {
-  test("should successfully submit until Flip payment instruction page", async ({
-    page,
-  }) => {
-    await page.goto("/zakat/maal");
+  test.describe("Flip", () => {
+    test("should successfully generate and navigate to Flip payment page with correct amount", async ({
+      page,
+      context,
+    }) => {
+      const nominalInput = "100000";
+      const nominalRegex = /Rp\s?100\.000/;
 
-    // input nominal zakat
-    await page.getByPlaceholder("0").fill("100000");
+      await page.goto("/zakat/maal");
 
-    // pilih metode pembayaran flip
-    await page.getByRole("radio", { name: /Flip/i }).check({ force: true });
+      // input nominal zakat
+      await page.getByPlaceholder("0").fill(nominalInput);
 
-    // input nama lengkap
-    await page.getByLabel(/nama lengkap/i).fill("Fulanah");
+      // pilih metode pembayaran flip
+      await page.getByRole("radio", { name: /Flip/i }).check({ force: true });
 
-    //input nomor whatsapp
-    await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
+      // input nama lengkap
+      await page.getByLabel(/nama lengkap/i).fill("Fulanah");
 
-    //input email
-    await page.getByLabel(/Email/i).fill("fulanah@example.com");
+      //input nomor whatsapp
+      await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
 
-    // klik tombol
-    await page
-      .getByRole("button", {
-        name: /Tunaikan zakat sekarang/i,
-      })
-      .click();
+      //input email
+      await page.getByLabel(/Email/i).fill("fulanah@example.com");
 
-    await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
-    await expect(
-      page.getByRole("link", { name: /Bayar Via Flip/i }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /Bayar Via Flip/i }),
-    ).toHaveAttribute("href", /.*flip\.id.*/);
+      // klik tombol
+      await page
+        .getByRole("button", {
+          name: /Tunaikan zakat sekarang/i,
+        })
+        .click();
+
+      await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
+
+      const flipButton = page.getByRole("link", { name: /Bayar Via Flip/i });
+      await expect(flipButton).toBeVisible();
+      await expect(flipButton).toHaveAttribute("href", /.*flip\.id.*/);
+      await expect(page.getByText(nominalRegex)).toBeVisible();
+
+      const pagePromise = context.waitForEvent("page");
+      await flipButton.click();
+
+      const flipPage = await pagePromise;
+      await flipPage.waitForLoadState("load");
+      await expect(flipPage).toHaveURL(/.*flip\.id\/.*\/payment-methods.*/);
+      await expect(flipPage.getByText(nominalRegex)).toBeVisible();
+
+      await flipPage.close();
+    });
   });
 });
