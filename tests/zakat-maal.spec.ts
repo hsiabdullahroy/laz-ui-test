@@ -339,4 +339,57 @@ test.describe("Zakat Journey Flow", () => {
       await flipPage.close();
     });
   });
+
+  test.describe("BSI", () => {
+    test("should successfully generate BSI payment code (Virtual Account) after submission", async ({
+      page,
+      context,
+    }) => {
+      const nominalInput = "100000";
+      const nominalRegex = /Rp\s?100\.000/;
+
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.goto("/zakat/maal");
+
+      // input nominal zakat
+      await page.getByPlaceholder("0").fill(nominalInput);
+
+      // pilih metode pembayaran BSI
+      await page.getByRole("radio", { name: /BSI/i }).check({ force: true });
+
+      // input nama lengkap
+      await page.getByLabel(/nama lengkap/i).fill("Fulanah");
+
+      //input nomor whatsapp
+      await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
+
+      //input email
+      await page.getByLabel(/Email/i).fill("fulanah@example.com");
+
+      // klik tombol
+      await page
+        .getByRole("button", {
+          name: /Tunaikan zakat sekarang/i,
+        })
+        .click();
+
+      await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
+      await expect(page.getByText("BSI Virtual Account")).toBeVisible();
+
+      await expect(page.getByText(nominalRegex)).toBeVisible();
+
+      await expect(page.getByText(/\d{8,}/)).toBeVisible();
+      const va = await page.getByText(/\d{8,}/).innerText();
+
+      await page
+        .locator('button[data-slot="button"]')
+        .filter({ has: page.locator("svg.lucide-copy") })
+        .click();
+
+      const clipboardText = await page.evaluate(() =>
+        navigator.clipboard.readText(),
+      );
+      expect(clipboardText).toBe(va);
+    });
+  });
 });
