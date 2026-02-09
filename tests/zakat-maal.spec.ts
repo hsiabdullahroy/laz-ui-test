@@ -290,7 +290,7 @@ test.describe("Component Validation", () => {
 
 test.describe("Zakat Journey Flow", () => {
   test.describe("Flip", () => {
-    test("should successfully generate and navigate to Flip payment page with correct amount", async ({
+    test("should successfully process BSI VA payment through Flip and display transaction details", async ({
       page,
       context,
     }) => {
@@ -336,7 +336,49 @@ test.describe("Zakat Journey Flow", () => {
       await expect(flipPage).toHaveURL(/.*flip\.id\/.*\/payment-methods.*/);
       await expect(flipPage.getByText(nominalRegex)).toBeVisible();
 
-      await flipPage.close();
+      const vaCategory = flipPage
+        .locator('button[data-qaid="qa-payment-method-category-button"]')
+        .filter({ hasText: "Virtual Account" });
+      await vaCategory.click();
+
+      const bsiOption = flipPage
+        .locator('div[data-qaid="qa-payment-method-options"]')
+        .filter({ hasText: "BSI VA" });
+      await bsiOption.click();
+
+      const methodSelected = flipPage.locator(
+        '[data-qaid="qa-payment-summary-method-selected"]',
+      );
+      await expect(methodSelected).toHaveText("BSI VA");
+
+      const lanjutkanBtn = flipPage.locator(
+        '[data-qaid="qa-payment-summary-continue-button"]',
+      );
+      await lanjutkanBtn.click();
+
+      const pahamBtn = flipPage.getByRole("button", {
+        name: "Tidak, Sudah Paham",
+      });
+      await pahamBtn.click();
+
+      await expect(flipPage.getByText("Sedang Diproses")).toBeVisible();
+
+      const berhasilBtn = flipPage.locator('button:has-text("Berhasil")');
+      await berhasilBtn.click();
+
+      await expect(
+        flipPage.locator('h1[data-qaid="qa-payment-title-nav"]'),
+      ).toHaveText("Transaksi berhasil");
+
+      await flipPage
+        .locator('[data-qaid="qa-payment-transaction-detail"]')
+        .click();
+
+      const totalAmountInDetail = flipPage.locator(
+        '[data-qaid="qa-transaction-detail-modal-total-amount"]',
+      );
+      await expect(totalAmountInDetail).toBeVisible();
+      await expect(totalAmountInDetail).toHaveText(nominalRegex);
     });
   });
 
