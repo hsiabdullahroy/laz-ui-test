@@ -289,39 +289,149 @@ test.describe("Component Validation", () => {
 });
 
 test.describe("Zakat Journey Flow", () => {
-  test("should successfully submit until Flip payment instruction page", async ({
-    page,
-  }) => {
-    await page.goto("/zakat/maal");
+  test.describe("Flip", () => {
+    test("should successfully process BSI VA payment through Flip and display transaction details", async ({
+      page,
+      context,
+    }) => {
+      const nominalInput = "100000";
+      const nominalRegex = /Rp\s?100\.000/;
 
-    // input nominal zakat
-    await page.getByPlaceholder("0").fill("100000");
+      await page.goto("/zakat/maal");
 
-    // pilih metode pembayaran flip
-    await page.getByRole("radio", { name: /Flip/i }).check({ force: true });
+      // input nominal zakat
+      await page.getByPlaceholder("0").fill(nominalInput);
 
-    // input nama lengkap
-    await page.getByLabel(/nama lengkap/i).fill("Fulanah");
+      // pilih metode pembayaran flip
+      await page.getByRole("radio", { name: /Flip/i }).check({ force: true });
 
-    //input nomor whatsapp
-    await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
+      // input nama lengkap
+      await page.getByLabel(/nama lengkap/i).fill("Fulanah");
 
-    //input email
-    await page.getByLabel(/Email/i).fill("fulanah@example.com");
+      //input nomor whatsapp
+      await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
 
-    // klik tombol
-    await page
-      .getByRole("button", {
-        name: /Tunaikan zakat sekarang/i,
-      })
-      .click();
+      //input email
+      await page.getByLabel(/Email/i).fill("fulanah@example.com");
 
-    await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
-    await expect(
-      page.getByRole("link", { name: /Bayar Via Flip/i }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /Bayar Via Flip/i }),
-    ).toHaveAttribute("href", /.*flip\.id.*/);
+      // klik tombol
+      await page
+        .getByRole("button", {
+          name: /Tunaikan zakat sekarang/i,
+        })
+        .click();
+
+      await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
+
+      const flipButton = page.getByRole("link", { name: /Bayar Via Flip/i });
+      await expect(flipButton).toBeVisible();
+      await expect(flipButton).toHaveAttribute("href", /.*flip\.id.*/);
+      await expect(page.getByText(nominalRegex)).toBeVisible();
+
+      const pagePromise = context.waitForEvent("page");
+      await flipButton.click();
+
+      const flipPage = await pagePromise;
+      await flipPage.waitForLoadState("load");
+      await expect(flipPage).toHaveURL(/.*flip\.id\/.*\/payment-methods.*/);
+      await expect(flipPage.getByText(nominalRegex)).toBeVisible();
+
+      const vaCategory = flipPage
+        .locator('button[data-qaid="qa-payment-method-category-button"]')
+        .filter({ hasText: "Virtual Account" });
+      await vaCategory.click();
+
+      const bsiOption = flipPage
+        .locator('div[data-qaid="qa-payment-method-options"]')
+        .filter({ hasText: "BSI VA" });
+      await bsiOption.click();
+
+      const methodSelected = flipPage.locator(
+        '[data-qaid="qa-payment-summary-method-selected"]',
+      );
+      await expect(methodSelected).toHaveText("BSI VA");
+
+      const lanjutkanBtn = flipPage.locator(
+        '[data-qaid="qa-payment-summary-continue-button"]',
+      );
+      await lanjutkanBtn.click();
+
+      const pahamBtn = flipPage.getByRole("button", {
+        name: "Tidak, Sudah Paham",
+      });
+      await pahamBtn.click();
+
+      await expect(flipPage.getByText("Sedang Diproses")).toBeVisible();
+
+      const berhasilBtn = flipPage.locator('button:has-text("Berhasil")');
+      await berhasilBtn.click();
+
+      await expect(
+        flipPage.locator('h1[data-qaid="qa-payment-title-nav"]'),
+      ).toHaveText("Transaksi berhasil");
+
+      await flipPage
+        .locator('[data-qaid="qa-payment-transaction-detail"]')
+        .click();
+
+      const totalAmountInDetail = flipPage.locator(
+        '[data-qaid="qa-transaction-detail-modal-total-amount"]',
+      );
+      await expect(totalAmountInDetail).toBeVisible();
+      await expect(totalAmountInDetail).toHaveText(nominalRegex);
+    });
+  });
+
+  test.describe("BSI", () => {
+    test("should successfully generate BSI payment code (Virtual Account) after submission", async ({
+      page,
+      context,
+    }) => {
+      const nominalInput = "100000";
+      const nominalRegex = /Rp\s?100\.000/;
+
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.goto("/zakat/maal");
+
+      // input nominal zakat
+      await page.getByPlaceholder("0").fill(nominalInput);
+
+      // pilih metode pembayaran BSI
+      await page.getByRole("radio", { name: /BSI/i }).check({ force: true });
+
+      // input nama lengkap
+      await page.getByLabel(/nama lengkap/i).fill("Fulanah");
+
+      //input nomor whatsapp
+      await page.getByLabel(/Nomor WhatsApp/i).fill("628123456789");
+
+      //input email
+      await page.getByLabel(/Email/i).fill("fulanah@example.com");
+
+      // klik tombol
+      await page
+        .getByRole("button", {
+          name: /Tunaikan zakat sekarang/i,
+        })
+        .click();
+
+      await expect(page).toHaveURL(/.*\/bayar\/zakat-maal\/\d+/);
+      await expect(page.getByText("BSI Virtual Account")).toBeVisible();
+
+      await expect(page.getByText(nominalRegex)).toBeVisible();
+
+      await expect(page.getByText(/\d{8,}/)).toBeVisible();
+      const va = await page.getByText(/\d{8,}/).innerText();
+
+      await page
+        .locator('button[data-slot="button"]')
+        .filter({ has: page.locator("svg.lucide-copy") })
+        .click();
+
+      const clipboardText = await page.evaluate(() =>
+        navigator.clipboard.readText(),
+      );
+      expect(clipboardText).toBe(va);
+    });
   });
 });
